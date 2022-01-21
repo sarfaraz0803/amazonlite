@@ -56,11 +56,22 @@ class SellerServiceImpl:IProductService {
         return newProList
     }
 
+    fun getProByName(proName:String):MutableList<Product>{
+        val proList = mutableListOf<Product>()
+        val allProducts = iProductDao.findAll()
+        for (i in allProducts){
+            if(i.name.lowercase() == proName.lowercase()){
+                proList.add(i)
+            }
+        }
+        return proList
+    }
+
 
     //=====================================Seller_Credentials==========================================
 
 
-    fun registerSeller(sellerAccount: SellerAccount):Any{
+    fun registerSeller(sellerAccount: SellerAccount):String{
         if(!iSellerAccountDao.existsById(sellerAccount.email)){
             val seller = SellerAccount(
                 _id = sellerAccount.email,
@@ -70,7 +81,7 @@ class SellerServiceImpl:IProductService {
                 mobile = sellerAccount.mobile
             )
             iSellerAccountDao.save(seller)
-            println(sellerAccount)
+            //println(sellerAccount)
             return "Successfully Registered"
         }
         return "Email Already Exist"

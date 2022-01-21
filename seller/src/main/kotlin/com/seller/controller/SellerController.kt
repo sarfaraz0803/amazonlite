@@ -1,6 +1,14 @@
 package com.seller.controller
 
 
+import com.amazonaws.auth.AWSCredentials
+import com.amazonaws.auth.AWSStaticCredentialsProvider
+import com.amazonaws.auth.BasicAWSCredentials
+import com.amazonaws.regions.Regions
+import com.amazonaws.services.s3.AmazonS3
+import com.amazonaws.services.s3.AmazonS3ClientBuilder
+import com.amazonaws.services.s3.model.CannedAccessControlList
+import com.amazonaws.services.s3.model.PutObjectRequest
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.readValue
 import com.seller.dao.IJwtCreDao
@@ -13,6 +21,7 @@ import com.seller.service.SellerServiceImpl
 import io.jsonwebtoken.ExpiredJwtException
 import org.bson.types.ObjectId
 import org.springframework.beans.factory.annotation.Autowired
+import org.springframework.beans.factory.annotation.Value
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder
@@ -22,6 +31,7 @@ import org.springframework.web.bind.annotation.*
 import org.springframework.web.multipart.MultipartFile
 import java.io.File
 import java.io.FileOutputStream
+import java.util.*
 import javax.servlet.http.HttpServletRequest
 import javax.servlet.http.HttpServletResponse
 import javax.validation.Valid
@@ -43,10 +53,32 @@ class SellerController {
     private val passwordEncoder = BCryptPasswordEncoder()
 
 
+    private var amazonS3client: AmazonS3? =null
+
+    @Value("\${amazon.s3.bucket.name}")
+    private val bucketName: String? = null
+
+
+    init {
+        val credentials: AWSCredentials = BasicAWSCredentials("AKIAWYTUKLOPLJU6JJXG", "8y2iuI30vr9WCBScbAwGfdrN+I5kUHbB66OM0tgq")
+        amazonS3client = AmazonS3ClientBuilder
+            .standard()
+            .withCredentials(AWSStaticCredentialsProvider(credentials))
+            .withRegion(Regions.AP_SOUTH_1)
+            .build()
+    }
+
+
     // =====================================Product_Operations===================================
 
-    @PostMapping("/addProduct")
-    fun addProduct(request: HttpServletRequest,@RequestParam("Image", required = false) file: MultipartFile, @RequestParam("product") product: String):ResponseEntity<Any>{
+    /*@PostMapping("/addProduct")
+    fun addProduct(request: HttpServletRequest,
+                   @RequestParam("Image", required = false) imageFile: MultipartFile,
+                   @RequestParam("name") name: String,
+                   @RequestParam("price") price:Double,
+                   @RequestParam("category") category:String,
+                   @RequestParam("description") description:String
+    ):ResponseEntity<Any>{
         val userId = request.getHeader("email")
         val token = request.getHeader("Authorization")
         if(token != null && userId != null){
@@ -86,7 +118,42 @@ class SellerController {
             return ResponseEntity("Need To Login!! Email Not Exist",HttpStatus.OK)
         }
         return ResponseEntity("Please provide token & email",HttpStatus.OK)
+    }*/
 
+    @PostMapping("/addProduct")
+    fun addProduct(request: HttpServletRequest,
+                   @RequestParam("Image", required = false) imageFile: MultipartFile,
+                   @RequestParam("name") name: String,
+                   @RequestParam("price") price:Double,
+                   @RequestParam("category") category:String,
+                   @RequestParam("description") description:String
+    ):ResponseEntity<Any>{
+        val userId = request.getHeader("email")
+        val token = request.getHeader("Authorization")
+        if(token != null && userId != null){
+            if(iJwtCreDao.existsById(userId)){
+                try {
+                    val result = jwtTokenValidation.validateUserToken(userId, token)
+                    if( result == true){
+                        val imageFileName = imageFile.originalFilename.toString()
+                        val file = File(imageFileName)
+                        val fileName = UUID.randomUUID().toString() + "." + imageFile.originalFilename
+                        amazonS3client?.putObject(PutObjectRequest(bucketName, fileName, file).withCannedAcl(CannedAccessControlList.PublicRead))
+                        val finalImage = amazonS3client?.getUrl(bucketName, fileName).toString()
+                        val finalProduct = Product(ObjectId(),userId,name,price,category,description,finalImage)
+                        return ResponseEntity(sellerServiceImpl.addProduct(finalProduct), HttpStatus.OK)
+                    }
+                    return ResponseEntity("Credentials Not Matching",HttpStatus.OK)
+                }catch (e: ExpiredJwtException){
+                    jwtTokenValidation.deleteJwtCre(token)
+                    return ResponseEntity("Token Expire!!! Please Login Again",HttpStatus.OK)
+                }catch (e:Exception){
+                    return ResponseEntity(e.message,HttpStatus.OK)
+                }
+            }
+            return ResponseEntity("Need To Login!! Email Not Exist",HttpStatus.OK)
+        }
+        return ResponseEntity("Please provide token & email",HttpStatus.OK)
     }
 
     @GetMapping("/allProducts")
@@ -123,8 +190,8 @@ class SellerController {
         return ResponseEntity("Please provide token & email",HttpStatus.OK)
     }
 
-    @GetMapping("/products/{email}")
-    fun allProductsByEmail(request: HttpServletRequest,@PathVariable email:String):ResponseEntity<Any>{
+    @GetMapping("/myProducts")
+    fun allProductsByEmail(request: HttpServletRequest):ResponseEntity<Any>{
         val userId = request.getHeader("email")
         val token = request.getHeader("Authorization")
         if(token != null && userId != null){
@@ -132,7 +199,7 @@ class SellerController {
                 try {
                     val result = jwtTokenValidation.validateUserToken(userId, token)
                     if( result == true){
-                        val products = sellerServiceImpl.getAllProductsByEmail(email)
+                        val products = sellerServiceImpl.getAllProductsByEmail(userId)
                         if(products.isEmpty()){
                             return ResponseEntity("No Products",HttpStatus.OK)
                         }
@@ -149,6 +216,15 @@ class SellerController {
             return ResponseEntity("Need To Login!! Email Not Exist",HttpStatus.OK)
         }
         return ResponseEntity("Please provide token & email",HttpStatus.OK)
+    }
+
+    @GetMapping("/productsByName/{name}")
+    fun getProductsByName(@PathVariable name:String):ResponseEntity<Any>{
+        val proResponse = sellerServiceImpl.getProByName(name)
+        if (proResponse.isNotEmpty()){
+            return ResponseEntity(proResponse,HttpStatus.OK)
+        }
+        return ResponseEntity("No Product",HttpStatus.OK)
     }
 
 
@@ -185,7 +261,7 @@ class SellerController {
                 response.addHeader("email",logSeller.email)
                 response.addHeader("Authorization",token)
                 val sellerResponse = SellerResponseDto(
-                    account = logSeller,
+                    email = logSeller.email,
                     token = token
                 )
 
@@ -193,8 +269,36 @@ class SellerController {
             }
             return ResponseEntity("wrong password",HttpStatus.OK)
         }
-        return ResponseEntity("This Email is not registered",HttpStatus.OK)
+        return ResponseEntity("email not registered",HttpStatus.OK)
 
+    }
+
+    @GetMapping("/loggedSeller")
+    fun loggedSeller(request: HttpServletRequest):ResponseEntity<Any>{
+        val userId = request.getHeader("email")
+        val token = request.getHeader("Authorization")
+        if(token != null && userId != null){
+            if(iJwtCreDao.existsById(userId)){
+                try {
+                    val result = jwtTokenValidation.validateUserToken(userId, token)
+                    if( result == true){
+                        val logSeller = sellerServiceImpl.login(userId)
+                        if(logSeller != null){
+                            return ResponseEntity(logSeller,HttpStatus.OK)
+                        }
+                        return ResponseEntity("Email Not Exist",HttpStatus.OK)
+                    }
+                    return ResponseEntity("Credentials Not Matching",HttpStatus.OK)
+                }catch (e: ExpiredJwtException){
+                    jwtTokenValidation.deleteJwtCre(token)
+                    return ResponseEntity("Token Expire!!! Please Login Again",HttpStatus.OK)
+                }catch (e:Exception){
+                    return ResponseEntity(e.message,HttpStatus.OK)
+                }
+            }
+            return ResponseEntity("Need To Login!! Email Not Exist",HttpStatus.OK)
+        }
+        return ResponseEntity("Please provide token & email",HttpStatus.OK)
     }
 
     @PostMapping("/logout")
@@ -240,7 +344,7 @@ class SellerController {
                         }
                         val updatedAccount = sellerServiceImpl.updateSeller(sellerAccount)
                         if(updatedAccount!=null){
-                            return ResponseEntity(updatedAccount,HttpStatus.OK)
+                            return ResponseEntity("Successfully Updated",HttpStatus.OK)
                         }
                         return ResponseEntity("Account Not Exist",HttpStatus.OK)
                     }

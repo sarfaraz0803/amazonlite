@@ -63,15 +63,44 @@ class BuyerController {
             if(passwordEncoder.matches(loginDto.password,loggedBuyer.password)){
                 val token = jwtTokenValidation.generateToken(loggedBuyer)
                 val buyerResponse = BuyerResponseDto(
-                    account = loggedBuyer,
+                    email = loggedBuyer.email,
                     token = token
                 )
                 return ResponseEntity(buyerResponse,HttpStatus.OK)
             }
             return ResponseEntity("Wrong Password",HttpStatus.OK)
         }
-        return ResponseEntity("Buyer/Email Not Exist",HttpStatus.OK)
+        return ResponseEntity("Email Not Exist",HttpStatus.OK)
     }
+
+    @GetMapping("/loggedBuyer")
+    fun loggedBuyer(request: HttpServletRequest):ResponseEntity<Any>{
+        val userId = request.getHeader("email")
+        val token = request.getHeader("Authorization")
+        if(token != null && userId != null){
+            if(iJwtCreDao.existsById(userId)){
+                try {
+                    val result = jwtTokenValidation.validateUserToken(userId, token)
+                    if( result == true){
+                        val buyerRes = buyerServiceImpl.login(userId)
+                        if(buyerRes != null){
+                            return ResponseEntity(buyerRes,HttpStatus.OK)
+                        }
+                        return ResponseEntity("Email Not Exist",HttpStatus.OK)
+                    }
+                    return ResponseEntity("Credentials Not Matching",HttpStatus.OK)
+                }catch (e: ExpiredJwtException){
+                    jwtTokenValidation.deleteJwtCre(token)
+                    return ResponseEntity("Token Expire!!! Please Login Again",HttpStatus.OK)
+                }catch (e:Exception){
+                    return ResponseEntity(e.message,HttpStatus.OK)
+                }
+            }
+            return ResponseEntity("Need To Login!! Email Not Exist",HttpStatus.OK)
+        }
+        return ResponseEntity("Please provide token & email",HttpStatus.OK)
+    }
+
 
     @PostMapping("/logout")
     fun logout(request: HttpServletRequest):ResponseEntity<Any>{

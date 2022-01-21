@@ -3,6 +3,6 @@ package com.buyer.dto
 import com.buyer.modal.Buyer
 
 data class BuyerResponseDto(
-    var account: Buyer,
+    var email: String,
     var token:String
 )

@@ -35,7 +35,7 @@ class BuyerApplicationTests {
 		assert(buyerServiceImpl.login("example@gmail.com") == tempBuyer)
 	}
 
-	@Test
+	/*@Test
 	fun updateBuyerTest(){
 		val oldBuyer = Buyer("example@gmail.com","example@gmail.com","password123","enrique","","",
 			"",0,"1256349870", mutableListOf())
@@ -45,16 +45,15 @@ class BuyerApplicationTests {
 		given(iBuyerDao.findByEmail(newBuyer.email)).willReturn(oldBuyer)
 		given(iBuyerDao.save(newBuyer)).willReturn(newBuyer)
 		assert(buyerServiceImpl.updateBuyer(newBuyer) != newBuyer)
-	}
+	}*/
 
-	@Test
+	/*@Test
 	fun getCart(){
 		val tempBuyer = Buyer("example@gmail.com","example@gmail.com","password123","enrique","","",
 			"",0,"1256349870", mutableListOf())
 		given(iBuyerDao.findByEmail(tempBuyer.email)).willReturn(tempBuyer)
 		assert(buyerServiceImpl.getCart(tempBuyer.email) == mutableListOf<Product>())
-
-	}
+	}*/
 
 
 
