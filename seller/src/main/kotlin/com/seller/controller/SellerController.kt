@@ -60,7 +60,7 @@ class SellerController {
 
 
     init {
-        val credentials: AWSCredentials = BasicAWSCredentials("AKIAWYTUKLOPLJU6JJXG", "8y2iuI30vr9WCBScbAwGfdrN+I5kUHbB66OM0tgq")
+        val credentials: AWSCredentials = BasicAWSCredentials("your_accesskey", "your_secretkey")
         amazonS3client = AmazonS3ClientBuilder
             .standard()
             .withCredentials(AWSStaticCredentialsProvider(credentials))
